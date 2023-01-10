@@ -1,66 +1,117 @@
 const mariadb = require("mariadb");
 
-console.log("Create bridge");
-
-const pool = mariadb.createPool({
-  host: "localhost",
-  user: "root",
-  password: "root",
-  port: 3306,
-  connectionLimit: 5,
-  database: "test",
-});
-
-console.log("Bridge created");
+const wait = async (time) => {
+  return await new Promise((resolve) => {
+    setTimeout(resolve, time * 1000);
+  });
+};
 
 async function asyncFunction() {
+  console.log("Criar ponte");
+
+  const pool = mariadb.createPool({
+    host: "localhost",
+    user: "root",
+    password: "root",
+    port: 3306,
+    connectionLimit: 5,
+    database: "test",
+  });
+
+  console.log("Ponte criada");
+
+  await wait(0.5);
+
   let connection;
 
-  console.log("Start connection");
+  console.log("Criar conexão");
 
   connection = await pool.getConnection();
 
-  console.log("Connection created");
+  console.log("Conexão criada");
+
+  await wait(0.5);
 
   try {
+    console.log("Configurar tabela");
+
     await connection.query("DROP TABLE IF EXISTS pessoasFisicasComCNPJ");
 
     await connection.query(
       "CREATE TABLE pessoasFisicasComCNPJ (name varchar(255), cpf varchar(255), cnpj varchar(255))"
     );
 
-    console.log("Pull pessoasfisicas");
+    console.log("Tabela configurada");
+
+    await wait(0.5);
+
+    console.log("Analisar pessoas físicas");
 
     const queryPF = await connection.query("SELECT * FROM pessoasfisicas");
 
-    console.log("Pessoas fisicas pulled");
+    console.log("Pessoas fisicas analisadas");
+
+    await wait(0.5);
 
     const pessoasFisicas = transformInArray(queryPF);
 
+    let actualIndex = 0;
+
     async function searchPrimoInBr(nome, cpf) {
-      console.log("pessoasjuridicas search", nome);
+      if (!nome || !cpf) return;
 
-      const queryPJ = await connection.query(
-        `SELECT * FROM pessoasjuridicas WHERE cnpj_cpf_socio='${cpf}'`
-      );
+      console.log("Procurar pessoa juridica", nome);
 
-      const cnpjs = transformInArray(queryPJ).map((item) => item.cnpj);
+      try {
+        console.log("Procurando");
 
-      if (!cnpjs.length) return;
+        const queryPJ = await connection.query(
+          `SELECT * FROM pessoasjuridicas WHERE cnpj_cpf_socio='${cpf.replace(
+            /-/g,
+            ""
+          )}'`
+        );
 
-      const insertData = [nome, cpf, cnpjs.join("^")];
+        const cnpjs = transformInArray(queryPJ).map((item) => item.cnpj);
 
-      await conn.query(
-        "INSERT INTO pessoasFisicasComCNPJ VALUES (?, ?, ?)",
-        insertData
-      );
+        if (!cnpjs.length) {
+          throw new Error("Sem CNPJ");
+        }
 
-      console.log("sucesso", nome);
+        const insertData = [nome, cpf, cnpjs.join("^")];
+
+        await connection.query(
+          "INSERT INTO pessoasFisicasComCNPJ VALUES (?, ?, ?)",
+          insertData
+        );
+
+        console.log("sucesso", nome);
+      } catch (error) {
+        console.log(nome);
+      }
+
+      if (pessoasFisicas.length > actualIndex) {
+        actualIndex += 1;
+
+        let search = pessoasFisicas[actualIndex];
+
+        if (!search) {
+          return;
+        }
+
+        await wait(0.5);
+
+        searchPrimoInBr(
+          pessoasFisicas[actualIndex]["Nome"],
+          pessoasFisicas[actualIndex]["CPF"]
+        );
+      }
     }
 
-    pessoasFisicas.forEach(({ Nome, CPF }) => {
-      searchPrimoInBr(Nome, CPF.replace(/-/g, ""));
-    });
+    searchPrimoInBr(
+      pessoasFisicas[actualIndex]["Nome"],
+      pessoasFisicas[actualIndex]["CPF"]
+    );
   } catch (error) {
     console.log(error);
   } finally {
