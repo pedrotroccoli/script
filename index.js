@@ -1,5 +1,7 @@
 const mariadb = require("mariadb");
 
+console.log("Create bridge");
+
 const pool = mariadb.createPool({
   host: "localhost",
   user: "root",
@@ -9,8 +11,12 @@ const pool = mariadb.createPool({
   database: "teste",
 });
 
+console.log("Bridge created");
+
 async function asyncFunction() {
   let connection;
+
+  console.log("Start connection");
 
   connection = await pool.getConnection();
 
