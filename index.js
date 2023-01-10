@@ -8,7 +8,7 @@ const pool = mariadb.createPool({
   password: "root",
   port: 3306,
   connectionLimit: 5,
-  database: "teste",
+  database: "test",
 });
 
 console.log("Bridge created");
@@ -20,6 +20,8 @@ async function asyncFunction() {
 
   connection = await pool.getConnection();
 
+  console.log("Connection created");
+
   try {
     await connection.query("DROP TABLE IF EXISTS pessoasFisicasComCNPJ");
 
@@ -27,11 +29,17 @@ async function asyncFunction() {
       "CREATE TABLE pessoasFisicasComCNPJ (name varchar(255), cpf varchar(255), cnpj varchar(255))"
     );
 
+    console.log("Pull pessoasfisicas");
+
     const queryPF = await connection.query("SELECT * FROM pessoasfisicas");
+
+    console.log("Pessoas fisicas pulled");
 
     const pessoasFisicas = transformInArray(queryPF);
 
     async function searchPrimoInBr(nome, cpf) {
+      console.log("pessoasjuridicas search", nome);
+
       const queryPJ = await connection.query(
         `SELECT * FROM pessoasjuridicas WHERE cnpj_cpf_socio='${cpf}'`
       );
