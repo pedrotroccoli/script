@@ -20,6 +20,7 @@ const colors = {
   cyan: `\x1b[36m`,
   white: `\x1b[37m`,
   black: "\x1b[30m",
+  red: "\x1b[31m",
 };
 
 const effects = {
@@ -58,17 +59,41 @@ async function setupTable(connection) {
   printGroup(" Tabela ", [`\x1b[43m`, `\x1b[30m`]);
 
   await wait(1);
-  console.log("Configurando tabela");
+  console.log("Configurando tabela de resultados");
 
   await connection.query("DROP TABLE IF EXISTS pessoasFisicasComCNPJ");
 
   await connection.query(
-    "CREATE TABLE pessoasFisicasComCNPJ (name varchar(150), cpf varchar(11), cnpjs TEXT)"
+    "CREATE TABLE pessoasFisicasComCNPJ (name varchar(150), cpf varchar(11), cnpjs LONGTEXT)"
   );
 
   await wait(1);
 
-  console.log("Tabela configurada");
+  console.log("Tabela de resultados configurada");
+
+  console.log(" ");
+
+  console.log("Criando tabela filtrada de pessoas fisicas");
+
+  await connection.query(
+    "CREATE TABLE filtradoPessoasFisicas (Nome VARCHAR(100), cpf VARCHAR(11))"
+  );
+
+  await connection.query(
+    "INSERT INTO filtradoPessoasFisicas (Nome, CPF) SELECT Primeiro_Nome, REPLACE(cnpj_cpf_socio, '-', '') AS cpf FROM pessoasFisicas;"
+  );
+
+  console.log("Tabela de pessoas fisicas filtrada criada! ");
+
+  console.log(" ");
+
+  console.log("Otimizando tabela");
+
+  await connection.query(
+    "CREATE INDEX cpf_indice USING BTREE ON filtradoPessoasFisicas (cpf);"
+  );
+
+  console.log("Tabela otimizada");
 
   console.groupEnd();
 
@@ -97,10 +122,10 @@ async function getPeople(connection) {
   return transformInArray(queryPF);
 }
 
-async function getCompaniesByCPF(connection, cpf) {
+async function getCompaniesByCPFAndName(connection, cpf, name) {
   const companies = await connection.query(
-    `SELECT * FROM filtradoPessoasJuridicas WHERE cpf=(?)`,
-    [cpf]
+    `SELECT * FROM filtradoPessoasJuridicas WHERE cpf=(?) AND name LIKE (?)`,
+    [cpf, `${name.replace(" ", "")}%`]
   );
 
   return transformInArray(companies);
@@ -134,7 +159,16 @@ async function start() {
     do {
       const currentPerson = people[index];
 
-      const companies = await getCompaniesByCPF(connection, currentPerson.cpf);
+      if (!currentPerson.cpf) {
+        rejected += 1;
+        continue;
+      }
+
+      const companies = await getCompaniesByCPFAndName(
+        connection,
+        currentPerson.cpf,
+        currentPerson.Nome
+      );
 
       const cnpjs = companies.map((item) => item.cnpj);
 
@@ -148,7 +182,7 @@ async function start() {
         connection,
         companies[0].name,
         currentPerson.cpf,
-        cnpjs.slice(0, 30)
+        cnpjs
       );
 
       if (index !== 0 && index % 1000 === 0) {
@@ -187,7 +221,7 @@ function startTimer() {
 function sendGroupTimer(index, rejected) {
   printGroup("Análise temporária", [backgrounds.gray, colors.white]);
   console.log("Analisadas:", index);
-  console.log("Rejeitadas:", rejected);
+  printLog(`Rejeitadas: ${rejected}`, [colors.red]);
   console.timeEnd("Tempo corrido");
   console.groupEnd();
 
@@ -196,8 +230,9 @@ function sendGroupTimer(index, rejected) {
 }
 
 function endTimer(index, rejectedSum) {
-  console.group("Total");
-  console.log("Total de pessoas:", index);
+  console.log(" ");
+  printGroup("TOTAL", [backgrounds.green, colors.black]);
+  console.log("Total de pessoas analisadas:", index);
   console.timeEnd("Tempo corrido");
   console.log("Total de rejeitados:", rejectedSum);
   console.timeEnd("Tempo total");
