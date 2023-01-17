@@ -93,7 +93,11 @@ async function setupTable(connection) {
     "CREATE INDEX cpf_indice USING BTREE ON filtradoPessoasFisicas (cpf);"
   );
 
-  console.log("Tabela otimizada");
+  await connection.query(
+    "CREATE INDEX cpf_indice USING BTREE ON filtradoPessoasJuridicas (cpf);"
+  );
+
+  console.log("Tabelas otimizada");
 
   console.groupEnd();
 
